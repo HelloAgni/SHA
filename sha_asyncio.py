@@ -1,0 +1,112 @@
+"""
+Скрипт с асинхронными задачами.
+
+Скачивающий содержимое HEAD репозитория
+https://gitea.radium.group/radium/project-configuration
+во временную папку temp.
+"""
+import asyncio
+import hashlib
+import logging
+import pathlib
+import sys
+import time
+
+import aiofiles
+import aiohttp
+from tqdm.asyncio import tqdm_asyncio
+
+MAIN_URL = 'https://gitea.radium.group/api/v1/' \
+           'repos/radium/project-configuration/contents'
+TEMP_ROOT = ''.join((str(pathlib.Path(__file__).parent), '/temp/'))
+
+file_handler = logging.FileHandler(filename='info.log')
+stdout_handler = logging.StreamHandler(stream=sys.stdout)
+handlers = [file_handler, stdout_handler]
+
+logging.basicConfig(
+    format='%(message)s',
+    level=logging.INFO,
+    handlers=handlers,
+)
+
+
+async def download_file(session, url, name):
+    """
+    Загрузка файла в папку temp.
+
+    Args:
+        session: ClientSession
+        url: str
+        name: str
+    """
+    async with aiofiles.open(f'{TEMP_ROOT}{name}', 'wb') as new_file:
+        async with session.get(url) as dl:
+            async for file_data in dl.content.iter_any():
+                await new_file.write(file_data)
+
+
+async def task_from_req(file_data, session):
+    """
+    Получение url и имя файла для загрузки.
+
+    Args:
+        file_data: dict
+        session: ClientSession
+    """
+    if file_data.get('type') == 'file':
+        await download_file(
+            session, file_data.get('download_url'), file_data.get('name'),
+        )
+    if file_data.get('type') == 'dir':
+        dir_name = file_data.get('name')
+        async with session.get(f'{MAIN_URL}/{dir_name}') as response:
+            to_json = await response.json()
+            for dir_file in to_json:
+                if dir_file.get('type') == 'file':
+                    await download_file(
+                        session,
+                        dir_file.get('download_url'),
+                        dir_file.get('name'),
+                    )
+
+
+async def async_execute():
+    """Запуск цикла событий."""
+    async with aiohttp.ClientSession() as session:
+        res = await session.get(MAIN_URL)
+        tasks = [
+            task_from_req(file_data, session) for file_data in await res.json()
+        ]
+        # await asyncio.gather(*tasks)
+        await tqdm_asyncio.gather(*tasks, desc='Downloading...')
+
+
+def sha():
+    """Открытие, чтение файлов, получение хэша."""
+    dir_files_name = [
+        str(files).split('/')[-1]
+        for files in pathlib.Path(TEMP_ROOT).iterdir()
+        if files.is_file()
+    ]
+    try:
+        for files in dir_files_name:
+            with open(
+                f'{TEMP_ROOT}{files}',
+            ) as any_file:
+                file_str = any_file.read()
+                hash_sum = hashlib.sha256(file_str.encode('utf-8')).hexdigest()
+                logging.info(f'{files} - {hash_sum}')
+    except NameError as error:
+        logging.error(f'Проблема с файлом - {error}')
+
+
+if __name__ == '__main__':
+    start = time.perf_counter()
+
+    pathlib.Path(TEMP_ROOT).mkdir(parents=True, exist_ok=True)
+    asyncio.run(async_execute())
+    sha()
+
+    end = time.perf_counter()
+    logging.info(f'Execution time: {round(end-start, 7)} second(s).\n')
