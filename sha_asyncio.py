@@ -31,7 +31,7 @@ logging.basicConfig(
 )
 
 
-async def download_file(session, url, name):
+async def download_file(session, url, name, temp_root=TEMP_ROOT):
     """
     Загрузка файла в папку temp.
 
@@ -39,20 +39,22 @@ async def download_file(session, url, name):
         session: ClientSession
         url: str
         name: str
+        temp_root: str
     """
-    async with aiofiles.open(f'{TEMP_ROOT}{name}', 'wb') as new_file:
+    async with aiofiles.open(f'{temp_root}{name}', 'wb') as new_file:
         async with session.get(url) as dl:
             async for file_data in dl.content.iter_any():
                 await new_file.write(file_data)
 
 
-async def task_from_req(file_data, session):
+async def task_from_req(file_data, session, url=MAIN_URL):
     """
     Получение url и имя файла для загрузки.
 
     Args:
         file_data: dict
         session: ClientSession
+        url: str
     """
     if file_data.get('type') == 'file':
         await download_file(
@@ -60,7 +62,7 @@ async def task_from_req(file_data, session):
         )
     if file_data.get('type') == 'dir':
         dir_name = file_data.get('name')
-        async with session.get(f'{MAIN_URL}/{dir_name}') as response:
+        async with session.get(f'{url}/{dir_name}') as response:
             to_json = await response.json()
             for dir_file in to_json:
                 if dir_file.get('type') == 'file':
@@ -78,27 +80,33 @@ async def async_execute():
         tasks = [
             task_from_req(file_data, session) for file_data in await res.json()
         ]
-        # await asyncio.gather(*tasks)
         await tqdm_asyncio.gather(*tasks, desc='Downloading...')
 
 
-def sha():
-    """Открытие, чтение файлов, получение хэша."""
+def sha(temp_root=TEMP_ROOT):
+    """Открытие, чтение файлов, получение хэша.
+
+    Args:
+        temp_root: str
+    """
+    result = []
     dir_files_name = [
         str(files).split('/')[-1]
-        for files in pathlib.Path(TEMP_ROOT).iterdir()
+        for files in pathlib.Path(temp_root).iterdir()
         if files.is_file()
     ]
     try:
         for files in dir_files_name:
             with open(
-                f'{TEMP_ROOT}{files}',
+                f'{temp_root}{files}',
             ) as any_file:
                 file_str = any_file.read()
                 hash_sum = hashlib.sha256(file_str.encode('utf-8')).hexdigest()
-                logging.info(f'{files} - {hash_sum}')
+                result.append(hash_sum)
+                logging.info(f'{files} - {hash_sum}')                
     except NameError as error:
         logging.error(f'Проблема с файлом - {error}')
+    return result
 
 
 if __name__ == '__main__':

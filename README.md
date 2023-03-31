@@ -1,11 +1,15 @@
+**A script that asynchronously downloads files and calculates the hash sum of the files.**
+***
+Скрипт, скачивающий содержимое репозитория во временную папку.  
+После выполнения всех асинхронных задач скрипт считает sha256
+хэши от каждого файла.  
+Результаты выводятся в терминал и записываются в файл info.log  
 
 ***How to start***  
 ```bash
 git clone <project>
 cd <project>
-```
 
-```bash
 python -m venv venv
 # Windows
 . venv/scripts/activate 
@@ -13,13 +17,4 @@ python -m venv venv
 . venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-
-
-pip install aiohttp
-pip install aiofiles
-
-pip install wemake-python-styleguide
-pip install pytest
-pip install pytest-asyncio
-
 ```
