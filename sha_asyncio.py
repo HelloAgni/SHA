@@ -11,7 +11,7 @@ import logging
 import pathlib
 import sys
 import time
-
+import shutil
 import aiofiles
 import aiohttp
 from tqdm.asyncio import tqdm_asyncio
@@ -115,6 +115,7 @@ if __name__ == '__main__':
     pathlib.Path(TEMP_ROOT).mkdir(parents=True, exist_ok=True)
     asyncio.run(async_execute())
     sha()
-
+    
+    shutil.rmtree(TEMP_ROOT, ignore_errors=True)
     end = time.perf_counter()
     logging.info(f'Execution time: {round(end-start, 7)} second(s).\n')
