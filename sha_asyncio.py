@@ -9,9 +9,10 @@ import asyncio
 import hashlib
 import logging
 import pathlib
+import shutil
 import sys
 import time
-import shutil
+
 import aiofiles
 import aiohttp
 from tqdm.asyncio import tqdm_asyncio
@@ -88,11 +89,17 @@ def sha(temp_root=TEMP_ROOT):
 
     Args:
         temp_root: str
+
+    Returns:
+        return: list
+
     """
-    result = []
+    list_results = []
     dir_files_name = [
-        str(files).split('/')[-1]
+        # str(files).split('/')[-1]
+        files.name
         for files in pathlib.Path(temp_root).iterdir()
+        # for files in pathlib.Path(temp_root).glob('*')
         if files.is_file()
     ]
     try:
@@ -102,20 +109,25 @@ def sha(temp_root=TEMP_ROOT):
             ) as any_file:
                 file_str = any_file.read()
                 hash_sum = hashlib.sha256(file_str.encode('utf-8')).hexdigest()
-                result.append(hash_sum)
-                logging.info(f'{files} - {hash_sum}')                
+                list_results.append(hash_sum)
+                logging.info(f'{files} - {hash_sum}')
     except NameError as error:
         logging.error(f'Проблема с файлом - {error}')
-    return result
+    return list_results
 
 
 if __name__ == '__main__':
     start = time.perf_counter()
-
     pathlib.Path(TEMP_ROOT).mkdir(parents=True, exist_ok=True)
+
+    if sys.platform == 'win32':  # Checking OS, if Windows use asyncio Fix
+        asyncio.set_event_loop_policy(
+            asyncio.WindowsSelectorEventLoopPolicy()
+        )
+
     asyncio.run(async_execute())
     sha()
-    
+
     shutil.rmtree(TEMP_ROOT, ignore_errors=True)
     end = time.perf_counter()
     logging.info(f'Execution time: {round(end-start, 7)} second(s).\n')
